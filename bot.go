@@ -7,11 +7,8 @@ import (
 )
 
 type request struct {
-	ChatID    int64
-	UserID    int64
-	MessageID int
-	VideoID   string
-	Ray       string
+	Data *RequestData
+	Ray  string
 }
 
 type result struct {
@@ -20,7 +17,7 @@ type result struct {
 }
 
 func ProxyVideo(bot *tg.BotAPI, req request, done chan<- result) {
-	url := MakeYoutubeURL(req.VideoID)
+	url := MakeYoutubeURL(req.Data.VideoID)
 	metadata, err := GetMetadata(url)
 	if err != nil {
 		done <- result{
@@ -32,12 +29,12 @@ func ProxyVideo(bot *tg.BotAPI, req request, done chan<- result) {
 	}
 
 	videoReader, waitC, downloadC := DownloadVideoRoutine(url)
-	video := tg.NewVideo(req.ChatID, &tg.FileReader{
-		Name:   req.VideoID,
+	video := tg.NewVideo(req.Data.ChatID, &tg.FileReader{
+		Name:   req.Data.VideoID,
 		Reader: videoReader,
 	})
 	video.Caption = metadata.Title
-	video.ReplyToMessageID = req.MessageID
+	video.ReplyToMessageID = req.Data.MessageID
 
 	_, sendErr := bot.Send(video)
 	close(waitC)
@@ -65,6 +62,37 @@ func RunBot(token string) error {
 
 	updatesC := bot.GetUpdatesChan(u)
 	resultsC := make(chan result)
+
+	handleRequest := func(reqData *RequestData) {
+		ray := uuid.NewV4().String()
+		req := request{
+			Data: reqData,
+			Ray:  ray,
+		}
+
+		if err := AddReq(reqData); err != nil {
+			resultsC <- result{
+				req: req,
+				err: err,
+			}
+
+			return
+		}
+
+		L.Info(
+			"Handle new request",
+			zap.String("ray", ray),
+			zap.String("video_id", reqData.VideoID),
+			zap.Int64("user_id", reqData.UserID),
+			zap.Int64("chat_id", reqData.ChatID),
+		)
+		go ProxyVideo(bot, req, resultsC)
+	}
+
+	for req := range ListReqs() {
+		handleRequest(req)
+	}
+
 	for {
 		select {
 		case update := <-updatesC:
@@ -73,28 +101,22 @@ func RunBot(token string) error {
 			}
 
 			for _, videoID := range GetUniqShorts(update.Message.Text) {
-				ray := uuid.NewV4().String()
-				L.Info(
-					"Handle new request",
-					zap.String("ray", ray),
-					zap.String("video_id", videoID),
-					zap.String("user_name", update.Message.From.UserName),
-					zap.Int64("user_id", update.Message.From.ID),
-					zap.Int64("chat_id", update.Message.Chat.ID),
-				)
-				go ProxyVideo(
-					bot,
-					request{
-						ChatID:    update.Message.Chat.ID,
-						UserID:    update.SentFrom().ID,
-						MessageID: update.Message.MessageID,
-						VideoID:   videoID,
-						Ray:       ray,
-					},
-					resultsC,
-				)
+				handleRequest(&RequestData{
+					ChatID:    update.Message.Chat.ID,
+					UserID:    update.SentFrom().ID,
+					MessageID: update.Message.MessageID,
+					VideoID:   videoID,
+				})
 			}
 		case result := <-resultsC:
+			if err := DelReq(result.req.Data); err != nil {
+				L.Error(
+					"Failed to clean up request",
+					zap.String("ray", result.req.Ray),
+					zap.Error(result.err),
+				)
+			}
+
 			if result.err != nil {
 				L.Error(
 					"Failed to handle request",
