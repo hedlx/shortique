@@ -20,12 +20,7 @@ func mustGetEnv(key string) string {
 }
 
 func main() {
-	token := mustGetEnv("TOKEN")
-	if err := Setup(); err != nil {
-		log.Fatal(err.Error())
-	}
-
-	if err := RunBot(token); err != nil {
+	if err := RunBot(mustGetEnv("TOKEN")); err != nil {
 		log.Fatal(err.Error())
 	}
 }
