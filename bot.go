@@ -1,10 +1,9 @@
 package main
 
 import (
-	"log"
-
 	tg "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	uuid "github.com/satori/go.uuid"
+	"go.uber.org/zap"
 )
 
 type request struct {
@@ -42,11 +41,10 @@ func ProxyVideo(bot *tg.BotAPI, req request, done chan<- result) {
 
 	_, sendErr := bot.Send(video)
 	close(waitC)
-	downloadErr := <-downloadC
+	err = <-downloadC
 
-	err = sendErr
 	if err == nil {
-		err = downloadErr
+		err = sendErr
 	}
 
 	done <- result{
@@ -76,7 +74,14 @@ func RunBot(token string) error {
 
 			for _, videoID := range GetUniqShorts(update.Message.Text) {
 				ray := uuid.NewV4().String()
-				log.Printf("[%s] Handle %s by %s [%d], chat: %d", ray, videoID, update.Message.From.UserName, update.Message.From.ID, update.Message.Chat.ID)
+				L.Info(
+					"Handle new request",
+					zap.String("ray", ray),
+					zap.String("video_id", videoID),
+					zap.String("user_name", update.Message.From.UserName),
+					zap.Int64("user_id", update.Message.From.ID),
+					zap.Int64("chat_id", update.Message.Chat.ID),
+				)
 				go ProxyVideo(
 					bot,
 					request{
@@ -91,9 +96,16 @@ func RunBot(token string) error {
 			}
 		case result := <-resultsC:
 			if result.err != nil {
-				log.Printf("[%s] Error occured: %s", result.req.Ray, result.err.Error())
+				L.Error(
+					"Failed to handle request",
+					zap.String("ray", result.req.Ray),
+					zap.Error(result.err),
+				)
 			} else {
-				log.Printf("[%s] Finished", result.req.Ray)
+				L.Info(
+					"Finished",
+					zap.String("ray", result.req.Ray),
+				)
 			}
 		}
 	}

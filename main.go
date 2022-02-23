@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"fmt"
 	"os"
 
 	_ "github.com/joho/godotenv/autoload"
@@ -13,7 +13,7 @@ func mustGetEnv(key string) string {
 	v := os.Getenv(key)
 
 	if v == "" {
-		log.Fatal(key, " env variable is required")
+		panic(fmt.Errorf("%s env variable is required", key))
 	}
 
 	return v
@@ -21,6 +21,6 @@ func mustGetEnv(key string) string {
 
 func main() {
 	if err := RunBot(mustGetEnv("TOKEN")); err != nil {
-		log.Fatal(err.Error())
+		panic(err)
 	}
 }
