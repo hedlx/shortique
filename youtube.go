@@ -5,27 +5,43 @@ import (
 	"regexp"
 )
 
-var shortRe = regexp.MustCompile(`https?://(www\.)?youtube\.com/shorts/(?P<id>[\w_-]+)`)
+var linkRe = regexp.MustCompile(`https?://((?P<src>www|music)\.)?youtube\.com/(shorts/|watch\?v=)(?P<id>[\w_-]+)`)
 
-func GetUniqShorts(str string) []string {
-	links := shortRe.FindAllString(str, -1)
-	ids := make([]string, 0, len(links))
+const (
+	VideoType = iota
+	MusicType = iota
+)
+
+type Source struct {
+	Id   string
+	Type int
+}
+
+func GetUniqSources(str string) []Source {
+	links := linkRe.FindAllString(str, -1)
+	sources := make([]Source, 0, len(links))
 
 r:
 	for _, link := range links {
-		matches := shortRe.FindStringSubmatch(link)
-		id := matches[shortRe.SubexpIndex("id")]
+		matches := linkRe.FindStringSubmatch(link)
+		id := matches[linkRe.SubexpIndex("id")]
 
-		for _, eid := range ids {
-			if eid == id {
+		for _, src := range sources {
+			if src.Id == id {
 				continue r
 			}
 		}
 
-		ids = append(ids, id)
+		src := matches[linkRe.SubexpIndex("src")]
+		typ := VideoType
+		if src == "music" {
+			typ = MusicType
+		}
+
+		sources = append(sources, Source{id, typ})
 	}
 
-	return ids
+	return sources
 }
 
 func MakeYoutubeURL(id string) string {

@@ -16,10 +16,11 @@ type RequestData struct {
 	UserID    int64
 	MessageID int
 	VideoID   string
+	Type      int
 }
 
 func (d RequestData) ToRedis() (string, string) {
-	return fmt.Sprintf("%d", d.UserID), fmt.Sprintf("%s:%d:%d", d.VideoID, d.ChatID, d.MessageID)
+	return fmt.Sprintf("%d", d.UserID), fmt.Sprintf("%s:%d:%d:%d", d.VideoID, d.ChatID, d.MessageID, d.Type)
 }
 
 func NewData(key, value string) (*RequestData, error) {
@@ -40,11 +41,17 @@ func NewData(key, value string) (*RequestData, error) {
 		return nil, err
 	}
 
+	typ, err := strconv.Atoi(vals[3])
+	if err != nil {
+		return nil, err
+	}
+
 	return &RequestData{
 		UserID:    userID,
 		VideoID:   videoID,
 		ChatID:    chatID,
 		MessageID: messageID,
+		Type:      typ,
 	}, nil
 }
 

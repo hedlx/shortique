@@ -28,15 +28,34 @@ func ProxyVideo(bot *tg.BotAPI, req request, done chan<- result) {
 		return
 	}
 
-	videoReader, waitC, downloadC := DownloadVideoRoutine(url)
-	video := tg.NewVideo(req.Data.ChatID, &tg.FileReader{
-		Name:   req.Data.VideoID,
-		Reader: videoReader,
-	})
-	video.Caption = metadata.Title
-	video.ReplyToMessageID = req.Data.MessageID
+	videoReader, waitC, downloadC := DownloadVideoRoutine(VideoSource{url, req.Data.Type})
+	def := tg.NewMessage(req.Data.ChatID, "This should never happen!")
+	def.ReplyToMessageID = req.Data.MessageID
 
-	_, sendErr := bot.Send(video)
+	var message tg.Chattable = def
+
+	if req.Data.Type == VideoType {
+		actual := tg.NewVideo(req.Data.ChatID, &tg.FileReader{
+			Name:   req.Data.VideoID + ".mp4",
+			Reader: videoReader,
+		})
+		actual.Caption = metadata.Title
+		actual.ReplyToMessageID = req.Data.MessageID
+
+		message = actual
+	} else {
+		actual := tg.NewAudio(req.Data.ChatID, &tg.FileReader{
+			Name:   req.Data.VideoID + ".mp3",
+			Reader: videoReader,
+		})
+		actual.ReplyToMessageID = req.Data.MessageID
+		actual.Performer = metadata.Channel
+		actual.Title = metadata.Title
+
+		message = actual
+	}
+
+	_, sendErr := bot.Send(message)
 	close(waitC)
 	err = <-downloadC
 
@@ -100,12 +119,13 @@ func RunBot(token string) error {
 				break
 			}
 
-			for _, videoID := range GetUniqShorts(update.Message.Text) {
+			for _, src := range GetUniqSources(update.Message.Text) {
 				handleRequest(&RequestData{
 					ChatID:    update.Message.Chat.ID,
 					UserID:    update.SentFrom().ID,
 					MessageID: update.Message.MessageID,
-					VideoID:   videoID,
+					VideoID:   src.Id,
+					Type:      src.Type,
 				})
 			}
 		case result := <-resultsC:

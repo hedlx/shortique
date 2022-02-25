@@ -19,8 +19,18 @@ func GetMetadata(url string) (*VideoMeta, error) {
 	return ParseMeta(output.Bytes())
 }
 
-func DownloadVideo(url string, waitC <-chan struct{}, doneC chan<- error) io.Reader {
-	cmd := exec.Command("yt-dlp", url, "-o", "-", "--no-part", "--max-filesize", "50M", "-f", "[filesize<50M]")
+type VideoSource struct {
+	Url  string
+	Type int
+}
+
+func DownloadVideo(src VideoSource, waitC <-chan struct{}, doneC chan<- error) io.Reader {
+	cmdParams := []string{src.Url, "-o", "-", "--no-part", "--max-filesize", "50M", "-f", "[filesize<50M]"}
+	if src.Type == MusicType {
+		cmdParams = append(cmdParams, "-f", "ba", "--audio-format", "mp3")
+	}
+
+	cmd := exec.Command("yt-dlp", cmdParams...)
 	out, err := cmd.StdoutPipe()
 
 	if err != nil {
@@ -49,8 +59,8 @@ func DownloadVideo(url string, waitC <-chan struct{}, doneC chan<- error) io.Rea
 	return out
 }
 
-func DownloadVideoRoutine(url string) (io.Reader, chan<- struct{}, <-chan error) {
+func DownloadVideoRoutine(src VideoSource) (io.Reader, chan<- struct{}, <-chan error) {
 	doneC := make(chan error)
 	waitC := make(chan struct{})
-	return DownloadVideo(url, waitC, doneC), waitC, doneC
+	return DownloadVideo(src, waitC, doneC), waitC, doneC
 }
