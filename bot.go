@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strings"
+
 	tg "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	uuid "github.com/satori/go.uuid"
 	"go.uber.org/zap"
@@ -14,6 +16,39 @@ type request struct {
 type result struct {
 	req request
 	err error
+}
+
+func UniqArtists(artists []string) []string {
+	used := map[string]bool{}
+	res := []string{}
+
+	for _, a := range artists {
+		la := strings.ToLower(a)
+
+		if used[la] {
+			continue
+		}
+
+		used[la] = true
+		res = append(res, a)
+	}
+
+	return res
+}
+
+func ExtractAudioInfo(meta *VideoMeta) (string, string) {
+	artists := strings.Split(meta.Artist, ", ")
+	if len(artists) == 0 {
+		artists = append(artists, meta.Channel)
+	}
+
+	artist := strings.Join(UniqArtists(artists), ", ")
+	track := meta.Track
+
+	if len(track) == 0 {
+		track = meta.Title
+	}
+	return artist, track
 }
 
 func ProxyVideo(bot *tg.BotAPI, req request, done chan<- result) {
@@ -49,8 +84,7 @@ func ProxyVideo(bot *tg.BotAPI, req request, done chan<- result) {
 			Reader: videoReader,
 		})
 		actual.ReplyToMessageID = req.Data.MessageID
-		actual.Performer = metadata.Channel
-		actual.Title = metadata.Title
+		actual.Performer, actual.Title = ExtractAudioInfo(metadata)
 
 		message = actual
 	}

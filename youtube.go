@@ -52,6 +52,8 @@ type VideoMeta struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	Channel     string `json:"channel"`
+	Artist      string `json:"artist"`
+	Track       string `json:"track"`
 	URL         string `json:"webpage_url"`
 	FileName    string `json:"_filename"`
 }
