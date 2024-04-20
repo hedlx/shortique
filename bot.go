@@ -133,10 +133,12 @@ func RunBot(token string) error {
 		}
 
 		if err := AddReq(reqData); err != nil {
-			resultsC <- result{
-				req: req,
-				err: err,
-			}
+			go func() {
+				resultsC <- result{
+					req: req,
+					err: err,
+				}
+			}()
 
 			return
 		}
@@ -176,6 +178,7 @@ func RunBot(token string) error {
 				})
 			}
 		case result := <-resultsC:
+			L.Debug("Cleaning up the request", zap.Any("request", result.req.Data))
 			if err := DelReq(result.req.Data); err != nil {
 				L.Error(
 					"Failed to clean up request",

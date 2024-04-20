@@ -80,6 +80,7 @@ func downloadInsta(in DownloadInput, waitC <-chan struct{}, doneC chan<- error) 
 	go func() {
 		defer resp.Body.Close()
 		<-waitC
+		doneC <- nil
 	}()
 
 	return resp.Body
