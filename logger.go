@@ -9,8 +9,7 @@ var L *zap.Logger
 func init() {
 	var err error
 
-	L, err = zap.NewProduction()
-
+	L, err = zap.NewDevelopment()
 	if err != nil {
 		panic(err)
 	}

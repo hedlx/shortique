@@ -7,41 +7,51 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-redis/redis/v8"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 )
 
 type RequestData struct {
+	Origin    string
+	VideoID   string
 	ChatID    int64
 	UserID    int64
 	MessageID int
-	VideoID   string
 	Type      int
 }
 
 func (d RequestData) ToRedis() (string, string) {
-	return fmt.Sprintf("%d", d.UserID), fmt.Sprintf("%s:%d:%d:%d", d.VideoID, d.ChatID, d.MessageID, d.Type)
+	return fmt.Sprintf("%d", d.UserID), fmt.Sprintf("%s:%s:%d:%d:%d", d.Origin, d.VideoID, d.ChatID, d.MessageID, d.Type)
 }
+
+const (
+	originPt    = 0
+	videoIDPt   = iota
+	chatIDPt    = iota
+	messageIDPt = iota
+	typePt      = iota
+)
 
 func NewData(key, value string) (*RequestData, error) {
 	vals := strings.Split(value, ":")
-	videoID := vals[0]
+	origin := vals[originPt]
+	videoID := vals[videoIDPt]
 	userID, err := strconv.ParseInt(key, 10, 64)
 	if err != nil {
 		return nil, err
 	}
 
-	chatID, err := strconv.ParseInt(vals[1], 10, 64)
+	chatID, err := strconv.ParseInt(vals[chatIDPt], 10, 64)
 	if err != nil {
 		return nil, err
 	}
 
-	messageID, err := strconv.Atoi(vals[2])
+	messageID, err := strconv.Atoi(vals[messageIDPt])
 	if err != nil {
 		return nil, err
 	}
 
-	typ, err := strconv.Atoi(vals[3])
+	typ, err := strconv.Atoi(vals[typePt])
 	if err != nil {
 		return nil, err
 	}
@@ -52,13 +62,16 @@ func NewData(key, value string) (*RequestData, error) {
 		ChatID:    chatID,
 		MessageID: messageID,
 		Type:      typ,
+		Origin:    origin,
 	}, nil
 }
 
-var mehCtx = context.Background()
-var rdb *redis.Client = redis.NewClient(&redis.Options{
-	Addr: mustGetEnv("REDIS"),
-})
+var (
+	mehCtx               = context.Background()
+	rdb    *redis.Client = redis.NewClient(&redis.Options{
+		Addr: mustGetEnv("REDIS"),
+	})
+)
 
 func WaitForRedis() {
 	for {
@@ -91,7 +104,6 @@ func ListReqs() <-chan *RequestData {
 			var err error
 
 			keys, cursor, err = rdb.Scan(mehCtx, cursor, "*", 0).Result()
-
 			if err != nil {
 				L.Error(
 					"Failed to scan redis",

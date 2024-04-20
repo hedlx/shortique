@@ -23,7 +23,6 @@ func main() {
 	L.Info("Hi there!")
 	L.Info("Waiting for redis...")
 	WaitForRedis()
-	L.Info("Starting the bot...")
 	if err := RunBot(mustGetEnv("TOKEN")); err != nil {
 		panic(err)
 	}

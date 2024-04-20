@@ -6,15 +6,16 @@ WORKDIR /app
 
 COPY go.mod ./
 COPY go.sum ./
-COPY *.go ./
 RUN go mod download
+COPY *.go ./
 RUN go build -o /shque
 
 
-FROM alpine
+FROM alpine:3
 
-RUN apk add yt-dlp
+RUN apk add --no-cache yt-dlp
 WORKDIR /
 COPY --from=build /shque /shque
 
 ENTRYPOINT ["/shque"]
+

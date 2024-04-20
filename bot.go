@@ -14,8 +14,8 @@ type request struct {
 }
 
 type result struct {
-	req request
 	err error
+	req request
 }
 
 func UniqArtists(artists []string) []string {
@@ -52,8 +52,7 @@ func ExtractAudioInfo(meta *VideoMeta) (string, string) {
 }
 
 func ProxyVideo(bot *tg.BotAPI, req request, done chan<- result) {
-	url := MakeYoutubeURL(req.Data.VideoID)
-	metadata, err := GetMetadata(url)
+	url, err := BuildURL(req.Data.Origin, req.Data.VideoID)
 	if err != nil {
 		done <- result{
 			req: req,
@@ -63,7 +62,17 @@ func ProxyVideo(bot *tg.BotAPI, req request, done chan<- result) {
 		return
 	}
 
-	videoReader, waitC, downloadC := DownloadVideoRoutine(VideoSource{url, req.Data.Type})
+	metadata, err := GetMetadata(url, req.Data.Origin)
+	if err != nil {
+		done <- result{
+			req: req,
+			err: err,
+		}
+
+		return
+	}
+
+	videoReader, waitC, downloadC := DownloadVideoRoutine(VideoSource{url, req.Data.Type}, req.Data.Origin)
 	def := tg.NewMessage(req.Data.ChatID, "This should never happen!")
 	def.ReplyToMessageID = req.Data.MessageID
 
@@ -104,8 +113,8 @@ func ProxyVideo(bot *tg.BotAPI, req request, done chan<- result) {
 }
 
 func RunBot(token string) error {
+	L.Info("Starting the bot...")
 	bot, err := tg.NewBotAPI(token)
-
 	if err != nil {
 		return err
 	}
@@ -146,10 +155,13 @@ func RunBot(token string) error {
 		handleRequest(req)
 	}
 
+	L.Info("Bot is online!")
 	for {
 		select {
 		case update := <-updatesC:
+			L.Info("New message")
 			if update.Message == nil {
+				L.Info("But no message")
 				break
 			}
 
@@ -160,6 +172,7 @@ func RunBot(token string) error {
 					MessageID: update.Message.MessageID,
 					VideoID:   src.Id,
 					Type:      src.Type,
+					Origin:    src.Origin,
 				})
 			}
 		case result := <-resultsC:
